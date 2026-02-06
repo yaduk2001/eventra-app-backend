@@ -1,16 +1,7 @@
 const { db } = require('../config/firebase');
 
 /**
- * Review Model
- * {
- *   entityId: string, // Service ID or Freelancer ID
- *   bookingId: string,
- *   reviewerId: string,
- *   userName: string,
- *   rating: number, // 1-5
- *   comment: string,
- *   createdAt: timestamp
- * }
+ * Review Model (RTDB 'reviews' node)
  */
 
 // Create Review
@@ -23,8 +14,8 @@ const createReview = async (req, res) => {
 
         // Validate Booking Completion (Optional but good practice)
         if (bookingId) {
-            const booking = await db.collection('bookings').doc(bookingId).get();
-            if (booking.exists && booking.data().status !== 'COMPLETED') {
+            const bookingSnapshot = await db.ref('bookings/' + bookingId).once('value');
+            if (bookingSnapshot.exists() && bookingSnapshot.val().status !== 'COMPLETED') {
                 return res.status(400).json({ message: 'Can only review completed bookings' });
             }
         }
@@ -39,7 +30,9 @@ const createReview = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        await db.collection('reviews').add(newReview);
+        const reviewRef = db.ref('reviews').push();
+        await reviewRef.set({ ...newReview, id: reviewRef.key });
+
         res.status(201).json({ message: 'Review submitted' });
 
     } catch (error) {
@@ -53,14 +46,17 @@ const reportEntity = async (req, res) => {
         const uid = req.user.uid;
         const { entityId, reason, type } = req.body; // type: 'SERVICE', 'JOB', 'USER'
 
-        await db.collection('reports').add({
+        const report = {
             reporterId: uid,
             entityId,
             type: type || 'GENERAL',
             reason,
             status: 'OPEN',
             createdAt: new Date().toISOString()
-        });
+        };
+
+        const reportRef = db.ref('reports').push();
+        await reportRef.set({ ...report, id: reportRef.key });
 
         res.json({ message: 'Report submitted. Admin will review.' });
     } catch (error) {

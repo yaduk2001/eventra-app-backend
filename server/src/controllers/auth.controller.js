@@ -35,7 +35,7 @@ const register = async (req, res) => {
             ...otherData // Specialized fields like businessName, etc.
         };
 
-        await db.collection('users').doc(uid).set(newUser);
+        await db.ref('users/' + uid).set(newUser);
 
         res.status(201).json({ message: 'User profile created successfully', user: newUser });
     } catch (error) {
@@ -50,13 +50,13 @@ const register = async (req, res) => {
 const getMe = async (req, res) => {
     try {
         const uid = req.user.uid;
-        const userDoc = await db.collection('users').doc(uid).get();
+        const userSnapshot = await db.ref('users/' + uid).once('value');
 
-        if (!userDoc.exists) {
+        if (!userSnapshot.exists()) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.status(200).json(userDoc.data());
+        res.status(200).json(userSnapshot.val());
     } catch (error) {
         console.error('GetMe Error:', error);
         res.status(500).json({ message: 'Failed to fetch profile' });

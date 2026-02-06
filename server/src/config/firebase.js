@@ -15,33 +15,38 @@ if (!admin.apps.length) {
             console.log('Firebase Init: Using GOOGLE_SERVICE_ACCOUNT_JSON from Env');
             // Priority 1: JSON String (Best for Production/CI)
             const serviceAccount = JSON.parse(serviceAccountJson);
+            const projectId = serviceAccount.project_id;
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount),
-                projectId: serviceAccount.project_id
+                projectId: projectId,
+                databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
             });
         } else if (serviceAccountPath) {
             console.log(`Firebase Init: Using GOOGLE_APPLICATION_CREDENTIALS file at ${serviceAccountPath}`);
-            // Priority 2: File Path (Best for Local Dev)
-            // If the path is absolute or relative, require works. 
-            // Note: require() caches, so for dynamic updates use fs.readFileSync if needed, but require is standard here.
+            const serviceAccount = require(serviceAccountPath);
+            const projectId = serviceAccount.project_id;
             admin.initializeApp({
-                credential: admin.credential.cert(require(serviceAccountPath))
+                credential: admin.credential.cert(serviceAccount),
+                projectId: projectId,
+                databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
             });
         } else {
             console.log('Firebase Init: Using Application Default Credentials');
-            // Priority 3: Application Default Credentials (GCP usage)
+            // Check if project ID is in env, otherwise might fail to guess URL without explicit config
+            const projectId = process.env.GOOGLE_CLOUD_PROJECT || 'eventra-13b4c';
             admin.initializeApp({
-                credential: admin.credential.applicationDefault()
+                credential: admin.credential.applicationDefault(),
+                databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
             });
         }
-        console.log('Firebase Admin Initialized successfully');
+        console.log('Firebase Admin Initialized successfully (Realtime Database)');
     } catch (error) {
         console.warn('Firebase Admin Initialization Warning:', error.message);
         console.warn('Ensure GOOGLE_APPLICATION_CREDENTIALS is set or service account is provided.');
     }
 }
 
-const db = admin.firestore();
+const db = admin.database();
 const auth = admin.auth();
 
 module.exports = { admin, db, auth };

@@ -27,9 +27,10 @@ const createBooking = async (req, res) => {
         }
 
         // 1. Fetch Service Details
-        const serviceDoc = await db.collection('services').doc(serviceId).get();
-        if (!serviceDoc.exists) return res.status(404).json({ message: 'Service not found' });
-        const service = serviceDoc.data();
+        // 1. Fetch Service Details
+        const serviceSnapshot = await db.ref('services/' + serviceId).once('value');
+        if (!serviceSnapshot.exists()) return res.status(404).json({ message: 'Service not found' });
+        const service = serviceSnapshot.val();
 
         // 2. Check Availability (Basic Concurrency Check)
         // In production, we'd use a transaction if "Single Slot" logic applies strictly.
@@ -59,11 +60,12 @@ const createBooking = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const docRef = await db.collection('bookings').add(newBooking);
+        const bookingRef = db.ref('bookings').push();
+        await bookingRef.set({ ...newBooking, id: bookingRef.key });
 
         // TODO: Send Notification to Provider (FCM)
 
-        res.status(201).json({ id: docRef.id, ...newBooking });
+        res.status(201).json({ id: bookingRef.key, ...newBooking });
     } catch (error) {
         console.error('Create Booking Error:', error);
         res.status(500).json({ message: 'Booking failed' });
@@ -76,19 +78,24 @@ const getBookings = async (req, res) => {
         const uid = req.user.uid;
         const role = req.userProfile.role;
 
-        let query = db.collection('bookings');
+        let snapshot;
 
+        // RTDB Query by single child
         if (role === 'CUSTOMER') {
-            query = query.where('customerId', '==', uid);
-        } else if (role === 'PROVIDER') {
-            query = query.where('providerId', '==', uid);
+            snapshot = await db.ref('bookings').orderByChild('customerId').equalTo(uid).once('value');
         } else {
-            // Freelancer logic similar to provider
-            query = query.where('providerId', '==', uid);
+            // Provider or Freelancer
+            snapshot = await db.ref('bookings').orderByChild('providerId').equalTo(uid).once('value');
         }
 
-        const snapshot = await query.orderBy('createdAt', 'desc').get();
-        const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let bookings = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                bookings.push({ id: child.key, ...child.val() });
+            });
+            // Sort by createdAt desc in memory
+            bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        }
 
         res.json(bookings);
     } catch (error) {
@@ -105,16 +112,13 @@ const updateBookingStatus = async (req, res) => {
         const uid = req.user.uid;
         const role = req.userProfile.role;
 
-        const bookingRef = db.collection('bookings').doc(id);
-        const bookingDoc = await bookingRef.get();
+        const bookingRef = db.ref('bookings/' + id);
+        const bookingSnapshot = await bookingRef.once('value');
 
-        if (!bookingDoc.exists) return res.status(404).json({ message: 'Booking not found' });
-        const booking = bookingDoc.data();
+        if (!bookingSnapshot.exists()) return res.status(404).json({ message: 'Booking not found' });
+        const booking = bookingSnapshot.val();
 
         // Authorization Logic
-        // Provider can: ACCEPT, REJECT, COMPLETE
-        // Customer can: CANCEL
-
         if (role === 'PROVIDER') {
             if (booking.providerId !== uid) return res.status(403).json({ message: 'Unauthorized' });
             if (!['ACCEPTED', 'REJECTED', 'CONFIRMED', 'COMPLETED'].includes(status)) {

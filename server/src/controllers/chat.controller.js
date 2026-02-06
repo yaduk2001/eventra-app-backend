@@ -27,17 +27,21 @@ const startChat = async (req, res) => {
 
         if (!peerId) return res.status(400).json({ message: 'Peer ID required' });
 
-        const existing = await db.collection('chats')
-            .where('participants', 'array-contains', uid)
-            .get();
+        // MVP: Fetch all chats and filter (Inefficient for scale, okay for prototype)
+        const chatsSnapshot = await db.ref('chats').once('value');
+        let existingChat = null;
 
-        let chatDoc = existing.docs.find(doc => {
-            const data = doc.data();
-            return data.participants.includes(peerId);
-        });
+        if (chatsSnapshot.exists()) {
+            chatsSnapshot.forEach(child => {
+                const data = child.val();
+                if (data.participants && data.participants.includes(uid) && data.participants.includes(peerId)) {
+                    existingChat = { id: child.key, ...data };
+                }
+            });
+        }
 
-        if (chatDoc) {
-            return res.json({ id: chatDoc.id, ...chatDoc.data() });
+        if (existingChat) {
+            return res.json(existingChat);
         }
 
         const newChat = {
@@ -48,8 +52,10 @@ const startChat = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const docRef = await db.collection('chats').add(newChat);
-        res.status(201).json({ id: docRef.id, ...newChat });
+        const chatRef = db.ref('chats').push();
+        await chatRef.set({ ...newChat, id: chatRef.key });
+
+        res.status(201).json({ id: chatRef.key, ...newChat });
 
     } catch (error) {
         res.status(500).json({ message: 'Failed to start chat' });
@@ -67,11 +73,12 @@ const sendMessage = async (req, res) => {
         if (!text) return res.status(400).json({ message: 'Content empty' });
 
         // Verify participation
-        const chatRef = db.collection('chats').doc(chatId);
-        const chatDoc = await chatRef.get();
-        if (!chatDoc.exists) return res.status(404).json({ message: 'Chat not found' });
+        const chatRef = db.ref('chats/' + chatId);
+        const chatSnapshot = await chatRef.once('value');
+        if (!chatSnapshot.exists()) return res.status(404).json({ message: 'Chat not found' });
 
-        if (!chatDoc.data().participants.includes(uid)) {
+        const chatData = chatSnapshot.val();
+        if (!chatData.participants || !chatData.participants.includes(uid)) {
             return res.status(403).json({ message: 'Not in this chat' });
         }
 
@@ -89,7 +96,8 @@ const sendMessage = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        await db.collection('messages').add(newMessage);
+        const msgRef = db.ref('messages').push();
+        await msgRef.set({ ...newMessage, id: msgRef.key });
 
         // Update Chat Preview
         await chatRef.update({
@@ -97,27 +105,30 @@ const sendMessage = async (req, res) => {
             lastMessageTime: newMessage.createdAt
         });
 
-        res.json(newMessage);
+        res.json({ ...newMessage, id: msgRef.key });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Send failed' });
     }
 };
 
-// Upload Media (Mock/Stub for MVP - In prod use Multer+Firebase Storage)
-// For MVP, we'll assume the client sends Base64 or a URL they generated.
-// Detailed implementation of Multi-part upload without 'multer' setup is complex in one step.
-// We will allow the frontend to send a dummy URL for now or if they send base64 treat as text.
-
 const getChats = async (req, res) => {
     try {
         const uid = req.user.uid;
-        const snapshot = await db.collection('chats')
-            .where('participants', 'array-contains', uid)
-            .orderBy('lastMessageTime', 'desc')
-            .get();
+        // MVP: Fetch all and filter
+        const snapshot = await db.ref('chats').once('value');
 
-        const chats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let chats = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                const data = child.val();
+                if (data.participants && data.participants.includes(uid)) {
+                    chats.push({ id: child.key, ...data });
+                }
+            });
+            chats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+        }
+
         res.json(chats);
     } catch (error) {
         res.status(500).json({ message: 'Fetch chats failed' });
@@ -129,17 +140,23 @@ const getMessages = async (req, res) => {
         const { chatId } = req.params;
         const uid = req.user.uid;
 
-        const chatDoc = await db.collection('chats').doc(chatId).get();
-        if (!chatDoc.exists || !chatDoc.data().participants.includes(uid)) {
+        const chatSnapshot = await db.ref('chats/' + chatId).once('value');
+        if (!chatSnapshot.exists()) return res.status(404).json({ message: 'Chat not found' });
+
+        const chatData = chatSnapshot.val();
+        if (!chatData.participants || !chatData.participants.includes(uid)) {
             return res.status(403).json({ message: 'Unauthorized' });
         }
 
-        const snapshot = await db.collection('messages')
-            .where('chatId', '==', chatId)
-            .orderBy('createdAt', 'asc')
-            .get();
+        const snapshot = await db.ref('messages').orderByChild('chatId').equalTo(chatId).once('value');
 
-        const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let messages = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                messages.push({ id: child.key, ...child.val() });
+            });
+            messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        }
         res.json(messages);
     } catch (error) {
         res.status(500).json({ message: 'Fetch messages failed' });

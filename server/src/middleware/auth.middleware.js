@@ -14,12 +14,21 @@ const verifyToken = async (req, res, next) => {
     const token = authHeader.split('Bearer ')[1];
 
     try {
+        // Attempt standard verification
         const decodedToken = await admin.auth().verifyIdToken(token);
         req.user = decodedToken;
         next();
     } catch (error) {
         console.error('Token Verification Error:', error);
-        return res.status(403).json({ message: 'Unauthorized: Invalid token' });
+
+        // Fallback for "Metadata service" errors specific to Render/GCP environment mishaps
+        // This is a safety net if verifyIdToken fails due to network/metadata lookups 
+        // but the token itself might be valid. 
+        // STUB: For now, we return 403 to be safe. 
+        // If this persists, we might need to rely on client-side auth state completely 
+        // or check if 'GOOGLE_SERVICE_ACCOUNT_JSON' is formatted 100% correctly.
+
+        return res.status(403).json({ message: 'Unauthorized: Invalid token', error: error.message });
     }
 };
 
@@ -37,14 +46,16 @@ const roleGuard = (allowedRoles) => {
                 return res.status(401).json({ message: 'Unauthorized' });
             }
 
-            // Fetch user role from Firestore
-            const userDoc = await db.collection('users').doc(req.user.uid).get();
+            // Fetch user role from Realtime Database
+            const userSnapshot = await db.ref('users/' + req.user.uid).once('value');
 
-            if (!userDoc.exists) {
+            if (!userSnapshot.exists()) {
+                // Try to see if wait, maybe we aren't creating it yet?
+                // Just return 404 for now.
                 return res.status(404).json({ message: 'User profile not found' });
             }
 
-            const userData = userDoc.data();
+            const userData = userSnapshot.val();
 
             if (userData.isBanned) {
                 return res.status(403).json({ message: 'Account is banned' });
@@ -58,7 +69,11 @@ const roleGuard = (allowedRoles) => {
             next();
         } catch (error) {
             console.error('Role Guard Error:', error);
-            res.status(500).json({ message: 'Internal Server Error' });
+            res.status(500).json({
+                message: 'Internal Server Error - Role Guard Failed',
+                error: error.message,
+                code: error.code // Log specific Firebase error code if available
+            });
         }
     };
 };
