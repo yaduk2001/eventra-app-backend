@@ -8,12 +8,28 @@ dotenv.config();
 // For local dev, we will assume generic setup until credentials are provided
 if (!admin.apps.length) {
     try {
+        const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
         const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-        if (serviceAccountPath) {
+
+        if (serviceAccountJson) {
+            console.log('Firebase Init: Using GOOGLE_SERVICE_ACCOUNT_JSON from Env');
+            // Priority 1: JSON String (Best for Production/CI)
+            const serviceAccount = JSON.parse(serviceAccountJson);
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+                projectId: serviceAccount.project_id
+            });
+        } else if (serviceAccountPath) {
+            console.log(`Firebase Init: Using GOOGLE_APPLICATION_CREDENTIALS file at ${serviceAccountPath}`);
+            // Priority 2: File Path (Best for Local Dev)
+            // If the path is absolute or relative, require works. 
+            // Note: require() caches, so for dynamic updates use fs.readFileSync if needed, but require is standard here.
             admin.initializeApp({
                 credential: admin.credential.cert(require(serviceAccountPath))
             });
         } else {
+            console.log('Firebase Init: Using Application Default Credentials');
+            // Priority 3: Application Default Credentials (GCP usage)
             admin.initializeApp({
                 credential: admin.credential.applicationDefault()
             });
