@@ -59,7 +59,11 @@ const getMe = async (req, res) => {
         res.status(200).json(userSnapshot.val());
     } catch (error) {
         console.error('GetMe Error:', error);
-        res.status(500).json({ message: 'Failed to fetch profile' });
+        res.status(500).json({
+            message: 'Failed to fetch profile',
+            error: error.message,
+            code: error.code
+        });
     }
 };
 

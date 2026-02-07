@@ -10,7 +10,7 @@ const getProfile = async (req, res) => {
         if (!userSnapshot.exists()) return res.status(404).json({ message: 'Profile not found' });
         res.json(userSnapshot.val());
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: error.message, code: error.code });
     }
 };
 

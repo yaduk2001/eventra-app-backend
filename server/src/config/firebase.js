@@ -33,10 +33,13 @@ if (!admin.apps.length) {
         } else {
             console.log('Firebase Init: Using Application Default Credentials');
             // Check if project ID is in env, otherwise might fail to guess URL without explicit config
+            // Check if project ID is in env, otherwise might fail to guess URL without explicit config
             const projectId = process.env.GOOGLE_CLOUD_PROJECT || 'eventra-13b4c';
+            const databaseURL = process.env.DATABASE_URL || `https://${projectId}-default-rtdb.firebaseio.com`;
+
             admin.initializeApp({
                 credential: admin.credential.applicationDefault(),
-                databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+                databaseURL: databaseURL
             });
         }
         console.log('Firebase Admin Initialized successfully (Realtime Database)');
