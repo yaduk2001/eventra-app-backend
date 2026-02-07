@@ -1,7 +1,7 @@
 const { db } = require('../config/firebase');
 
 /**
- * Review Model (RTDB 'reviews' node)
+ * Review Model (RTDB 'testimonials' node)
  */
 
 // Create Review
@@ -30,7 +30,7 @@ const createReview = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const reviewRef = db.ref('reviews').push();
+        const reviewRef = db.ref('testimonials').push();
         await reviewRef.set({ ...newReview, id: reviewRef.key });
 
         res.status(201).json({ message: 'Review submitted' });

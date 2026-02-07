@@ -28,7 +28,7 @@ const startChat = async (req, res) => {
         if (!peerId) return res.status(400).json({ message: 'Peer ID required' });
 
         // MVP: Fetch all chats and filter (Inefficient for scale, okay for prototype)
-        const chatsSnapshot = await db.ref('chats').once('value');
+        const chatsSnapshot = await db.ref('chat_rooms').once('value');
         let existingChat = null;
 
         if (chatsSnapshot.exists()) {
@@ -52,7 +52,7 @@ const startChat = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const chatRef = db.ref('chats').push();
+        const chatRef = db.ref('chat_rooms').push();
         await chatRef.set({ ...newChat, id: chatRef.key });
 
         res.status(201).json({ id: chatRef.key, ...newChat });
@@ -73,7 +73,7 @@ const sendMessage = async (req, res) => {
         if (!text) return res.status(400).json({ message: 'Content empty' });
 
         // Verify participation
-        const chatRef = db.ref('chats/' + chatId);
+        const chatRef = db.ref('chat_rooms/' + chatId);
         const chatSnapshot = await chatRef.once('value');
         if (!chatSnapshot.exists()) return res.status(404).json({ message: 'Chat not found' });
 
@@ -96,7 +96,7 @@ const sendMessage = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const msgRef = db.ref('messages').push();
+        const msgRef = db.ref('chat_messages').push();
         await msgRef.set({ ...newMessage, id: msgRef.key });
 
         // Update Chat Preview
@@ -116,7 +116,7 @@ const getChats = async (req, res) => {
     try {
         const uid = req.user.uid;
         // MVP: Fetch all and filter
-        const snapshot = await db.ref('chats').once('value');
+        const snapshot = await db.ref('chat_rooms').once('value');
 
         let chats = [];
         if (snapshot.exists()) {
@@ -140,7 +140,7 @@ const getMessages = async (req, res) => {
         const { chatId } = req.params;
         const uid = req.user.uid;
 
-        const chatSnapshot = await db.ref('chats/' + chatId).once('value');
+        const chatSnapshot = await db.ref('chat_rooms/' + chatId).once('value');
         if (!chatSnapshot.exists()) return res.status(404).json({ message: 'Chat not found' });
 
         const chatData = chatSnapshot.val();
@@ -148,7 +148,7 @@ const getMessages = async (req, res) => {
             return res.status(403).json({ message: 'Unauthorized' });
         }
 
-        const snapshot = await db.ref('messages').orderByChild('chatId').equalTo(chatId).once('value');
+        const snapshot = await db.ref('chat_messages').orderByChild('chatId').equalTo(chatId).once('value');
 
         let messages = [];
         if (snapshot.exists()) {

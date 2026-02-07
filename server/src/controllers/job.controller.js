@@ -27,7 +27,7 @@ const createJob = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        const jobRef = db.ref('jobs').push();
+        const jobRef = db.ref('job_postings').push();
         await jobRef.set({ ...newJob, id: jobRef.key });
 
         res.status(201).json({ id: jobRef.key, ...newJob });
@@ -43,7 +43,7 @@ const getJobs = async (req, res) => {
 
         // Fetch All OPEN jobs then filter
         // Optimization: orderByChild('status').equalTo('OPEN')
-        const snapshot = await db.ref('jobs').orderByChild('status').equalTo('OPEN').once('value');
+        const snapshot = await db.ref('job_postings').orderByChild('status').equalTo('OPEN').once('value');
 
         let jobs = [];
         if (snapshot.exists()) {
@@ -80,7 +80,6 @@ const applyForJob = async (req, res) => {
         const { jobId, coverNote } = req.body;
 
         // Check if already applied
-        // Query applications by jobId, then filter for applicantId
         const existingSnap = await db.ref('applications').orderByChild('jobId').equalTo(jobId).once('value');
         let alreadyApplied = false;
 

@@ -5,7 +5,7 @@ const getSystemStats = async (req, res) => {
     try {
         const usersSnap = await db.ref('users').once('value');
         const bookingsSnap = await db.ref('bookings').once('value');
-        const jobsSnap = await db.ref('jobs').once('value');
+        const jobsSnap = await db.ref('job_postings').once('value');
         const servicesSnap = await db.ref('services').once('value');
 
         res.json({
