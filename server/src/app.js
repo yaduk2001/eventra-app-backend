@@ -31,6 +31,7 @@ app.use('/api/chats', require('./routes/chat.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/reviews', require('./routes/review.routes'));
 app.use('/api/bids', require('./routes/bid.routes'));
+app.use('/api/passes', require('./routes/pass.routes'));
 
 // Global Error Handler
 app.use((err, req, res, next) => {

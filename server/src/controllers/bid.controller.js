@@ -16,6 +16,7 @@ const createBidRequest = async (req, res) => {
             eventName,
             eventType: eventType || 'GENERAL',
             date,
+            time: req.body.time || '',
             location: location || '',
             guestCount: Number(guestCount) || 0,
             budget: Number(budget),
