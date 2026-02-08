@@ -9,6 +9,14 @@ const { db } = require('../config/firebase');
 const createPass = async (req, res) => {
     try {
         const uid = req.user.uid;
+        let userProfile = req.userProfile;
+
+        // Fetch user profile if not provided by middleware
+        if (!userProfile) {
+            const userSnapshot = await db.ref('users/' + uid).once('value');
+            userProfile = userSnapshot.val() || {};
+        }
+
         const {
             eventName,
             eventDate,
@@ -25,7 +33,7 @@ const createPass = async (req, res) => {
 
         const newPass = {
             creatorId: uid,
-            creatorName: req.userProfile.fullName || 'Organizer',
+            creatorName: userProfile.fullName || userProfile.name || 'Organizer',
             eventName,
             eventDate,
             startTime: startTime || '',
