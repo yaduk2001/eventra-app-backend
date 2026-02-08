@@ -132,4 +132,23 @@ const purchasePass = async (req, res) => {
     }
 };
 
-module.exports = { createPass, getPasses, purchasePass };
+// Get My Purchased Passes
+const getMyPasses = async (req, res) => {
+    try {
+        const uid = req.user.uid;
+        const snapshot = await db.ref('pass_purchases').orderByChild('buyerId').equalTo(uid).once('value');
+
+        const myPasses = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                myPasses.push({ id: child.key, ...child.val() });
+            });
+        }
+        res.json(myPasses);
+    } catch (error) {
+        console.error('Get My Passes Error:', error);
+        res.status(500).json({ message: 'Failed to fetch my passes' });
+    }
+};
+
+module.exports = { createPass, getPasses, purchasePass, getMyPasses };
